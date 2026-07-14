@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.SystemClock;
+import android.util.Base64;
 import android.util.Log;
 
 import androidx.core.content.FileProvider;
@@ -38,8 +39,28 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 
 public class PlayerApi {
+    private static final Random RANDOM = new Random();
+
+    /**
+     * 生成随机 dm_img 指纹字符串（base64 编码，参照 PiliPlus 反风控实现）
+     * 字符范围为可打印 ASCII 0x26-0x7E（不含 '%'），长度在 minLen~maxLen 间随机
+     */
+    private static String randomDmImgStr(int minLen, int maxLen) {
+        int len = minLen + RANDOM.nextInt(maxLen - minLen + 1);
+        byte[] bytes = new byte[len];
+        for (int i = 0; i < len; i++) {
+            int b;
+            do {
+                b = 0x26 + RANDOM.nextInt(0x7E - 0x26 + 1);
+            } while (b == '%');
+            bytes[i] = (byte) b;
+        }
+        return Base64.encodeToString(bytes, Base64.NO_WRAP);
+    }
+
     public static void startGettingUrl(PlayerData playerData) {
         Context context = BiliTerminal.context;
 
@@ -110,11 +131,16 @@ public class PlayerApi {
                 + "avid=" + playerData.aid
                 + "&cid=" + playerData.cid
                 + "&qn=" + playerData.qn
-                + "&fnval=16&fnver=0" // 16:DASH格式
-                + "&platform=pc"
+                + "&fnval=4048&fnver=0" // 4048: DASH + HDR + 4K + 杜比 + 8K + AV1
+                + "&fourk=1"
                 + "&voice_balance=1"
                 + "&gaia_source=pre-load"
-                + "&isGaiaAvoided=true";
+                + "&isGaiaAvoided=true"
+                + "&web_location=1315873"
+                + "&dm_img_str=" + randomDmImgStr(16, 64)
+                + "&dm_cover_img_str=" + randomDmImgStr(32, 128)
+                + "&dm_img_inter=" + Uri.encode("{\"ds\":[],\"wh\":[0,0,0],\"of\":[0,0,0]}")
+                + "&dm_img_list=[]";
 
         url = ConfInfoApi.signWBI(url);
 
@@ -189,10 +215,16 @@ public class PlayerApi {
                 + (html5 ? "&high_quality=1" : "")
                 + "&qn=" + playerData.qn
                 + "&fnval=1&fnver=0"
+                + "&fourk=1"
                 + "&platform=" + (html5 ? "html5" : "pc")
                 + "&voice_balance=1"
                 + "&gaia_source=pre-load"
-                + "&isGaiaAvoided=true";
+                + "&isGaiaAvoided=true"
+                + "&web_location=1315873"
+                + "&dm_img_str=" + randomDmImgStr(16, 64)
+                + "&dm_cover_img_str=" + randomDmImgStr(32, 128)
+                + "&dm_img_inter=" + Uri.encode("{\"ds\":[],\"wh\":[0,0,0],\"of\":[0,0,0]}")
+                + "&dm_img_list=[]";
 
         url = ConfInfoApi.signWBI(url);
 
@@ -226,35 +258,54 @@ public class PlayerApi {
     }
 
     /**
-     * 解析番剧，和普通视频的api不一样
+     * 解析番剧，使用 v2 接口（参照 PiliPlus），支持 DASH 与 WBI 签名
      *
      * @param playerData 传入aid、cid、qn等必要数据
      */
     public static void getBangumi(PlayerData playerData) throws JSONException, IOException {
-        NetWorkUtil.FormData reqData = new NetWorkUtil.FormData()
-                .setUrlParam(true)
-                .put("aid", playerData.aid)
-                .put("cid", playerData.cid)
-                .put("fnval", 1)
-                .put("fnvar", 0)
-                .put("qn", playerData.qn)
-                .put("season_type", 1)
-                .put("session",
-                        ToolsUtil.md5(
-                                String.valueOf(System.currentTimeMillis() - SystemClock.currentThreadTimeMillis())))
-                .put("platform", "pc");
+        playerData.danmakuUrl = "https://comment.bilibili.com/" + playerData.cid + ".xml";
 
-        String url = "https://api.bilibili.com/pgc/player/web/playurl" + reqData.toString();
+        String url = "https://api.bilibili.com/pgc/player/web/v2/playurl?"
+                + "avid=" + playerData.aid
+                + "&cid=" + playerData.cid
+                + "&qn=" + playerData.qn
+                + "&fnval=4048&fnver=0"
+                + "&fourk=1"
+                + "&voice_balance=1"
+                + "&gaia_source=pre-load"
+                + "&isGaiaAvoided=true"
+                + "&web_location=1315873"
+                + "&dm_img_str=" + randomDmImgStr(16, 64)
+                + "&dm_cover_img_str=" + randomDmImgStr(32, 128)
+                + "&dm_img_inter=" + Uri.encode("{\"ds\":[],\"wh\":[0,0,0],\"of\":[0,0,0]}")
+                + "&dm_img_list=[]";
 
-        JSONObject body = NetWorkUtil.getJson(url);
+        url = ConfInfoApi.signWBI(url);
+
+        JSONObject body = NetWorkUtil.getJson(url, NetWorkUtil.webHeaders);
         Logu.v(body.toString());
 
         JSONObject data = body.getJSONObject("result");
-        JSONArray durl = data.getJSONArray("durl");
-        JSONObject video_url = durl.getJSONObject(0);
-        playerData.videoUrl = video_url.getString("url");
 
-        playerData.danmakuUrl = "https://comment.bilibili.com/" + playerData.cid + ".xml";
+        // 优先解析 DASH，无 DASH 时回退到 durl
+        if (data.has("dash")) {
+            JSONObject dashJson = data.getJSONObject("dash");
+            playerData.dashData = DashData.fromJson(dashJson);
+
+            DashVideoStream videoStream = playerData.dashData.getVideoStream(playerData.qn);
+            if (videoStream != null) {
+                playerData.videoUrl = videoStream.baseUrl;
+            }
+
+            DashAudioStream audioStream = playerData.dashData.getBestAudioStream();
+            if (audioStream != null) {
+                playerData.audioUrl = audioStream.baseUrl;
+            }
+        } else {
+            JSONArray durl = data.getJSONArray("durl");
+            JSONObject video_url = durl.getJSONObject(0);
+            playerData.videoUrl = video_url.getString("url");
+        }
 
         JSONArray accept_description = data.getJSONArray("accept_description");
         JSONArray accept_quality = data.getJSONArray("accept_quality");
