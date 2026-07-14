@@ -121,6 +121,7 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
     private boolean destroyed = false;
 
     private IjkMediaPlayer ijkPlayer;
+    private android.media.MediaPlayer audioPlayer; // DASH 分离音频流播放器
     private IDanmakuView mDanmakuView;
     private DanmakuContext mContext;
 
@@ -151,7 +152,7 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
     private Timer progressTimer, speedTimer, loadingTimer, onlineTimer, surfaceTimer;
     private Handler mainHandler;
     private Runnable danmakuSyncRunnable;
-    private String video_url, danmaku_url;
+    private String video_url, danmaku_url, audio_url;
     private MediaSession mediaSession;
 
     private boolean isPlaying, isPrepared, hasDanmaku,
@@ -229,6 +230,7 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
             return false;
 
         video_url = intent.getStringExtra("url");
+        audio_url = intent.getStringExtra("audio_url");
         danmaku_url = intent.getStringExtra("danmaku");
         String title = intent.getStringExtra("title");
 
@@ -757,6 +759,13 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
                                     ijkPlayer.setDisplay(surfaceHolder);
                                     if (isPrepared) {
                                         ijkPlayer.seekTo(seekbar_progress.getProgress());
+                                        if (audioPlayer != null) {
+                                            try {
+                                                if (audioPlayer.getDuration() > 0)
+                                                    audioPlayer.seekTo(seekbar_progress.getProgress());
+                                            } catch (Exception ignored) {
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -818,6 +827,15 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
             
             if (loop_enabled) {
                 ijkPlayer.seekTo(0);
+                if (audioPlayer != null) {
+                    try {
+                        if (audioPlayer.getDuration() > 0) {
+                            audioPlayer.seekTo(0);
+                            audioPlayer.start();
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
                 if (hasDanmaku && mDanmakuView != null) {
                     mDanmakuView.seekTo(0L);
                 }
@@ -876,6 +894,56 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
         ijkPlayer.setScreenOnWhilePlaying(true);
         ijkPlayer.prepareAsync();
         Logu.v("开始准备");
+
+        // 初始化分离音频流播放器（DASH 模式下音视频分离）
+        initAudioPlayer();
+    }
+
+    /**
+     * 初始化分离音频流播放器（用于 DASH 模式，音视频分离）
+     * 视频 IJKPlayer 播放，音频用系统 MediaPlayer 同步播放
+     */
+    private void initAudioPlayer() {
+        if (audio_url == null || audio_url.isEmpty()) return;
+        try {
+            releaseAudioPlayer();
+            audioPlayer = new android.media.MediaPlayer();
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Referer", "https://www.bilibili.com/");
+            headers.put("User-Agent", NetWorkUtil.USER_AGENT_WEB);
+            headers.put("Cookie", SharedPreferencesUtil.getString(SharedPreferencesUtil.cookies, ""));
+            audioPlayer.setDataSource(this, android.net.Uri.parse(audio_url), headers);
+            audioPlayer.setAudioStreamType(android.media.AudioManager.STREAM_MUSIC);
+            audioPlayer.setOnPreparedListener(mp -> {
+                mp.setLooping(ijkPlayer != null && ijkPlayer.isLooping());
+                // 视频准备好后才开始播放音频，与视频同步
+                if (isPrepared && isPlaying) {
+                    // 对齐到视频当前位置（处理历史进度跳转的情况）
+                    try {
+                        if (ijkPlayer != null && ijkPlayer.getDuration() > 0) {
+                            int pos = (int) ijkPlayer.getCurrentPosition();
+                            if (pos > 1000) mp.seekTo(pos);
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    mp.start();
+                }
+            });
+            audioPlayer.prepareAsync();
+            Logu.v("音频流", "初始化完成: " + audio_url);
+        } catch (IOException e) {
+            Logu.e("音频流", "初始化失败: " + e.getMessage());
+        }
+    }
+
+    private void releaseAudioPlayer() {
+        if (audioPlayer != null) {
+            try {
+                audioPlayer.release();
+            } catch (Exception ignored) {
+            }
+            audioPlayer = null;
+        }
     }
 
     @SuppressLint("SetTextI18n")
@@ -883,6 +951,7 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
     public void onPrepared(IMediaPlayer mediaPlayer) {
         if (destroyed) {
             ijkPlayer.release();
+            releaseAudioPlayer();
             return;
         }
 
@@ -976,6 +1045,12 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
         if (SharedPreferencesUtil.getBoolean("player_from_last", true) && !isLiveMode) {
             if (progress_history > 5) {
                 ijkPlayer.seekTo(progress_history);
+                if (audioPlayer != null) {
+                    try {
+                        if (audioPlayer.getDuration() > 0) audioPlayer.seekTo((int) progress_history);
+                    } catch (Exception ignored) {
+                    }
+                }
                 if (hasDanmaku && mDanmakuView != null) {
                     mDanmakuView.seekTo(progress_history);
                 }
@@ -988,6 +1063,14 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
         anim_loading.stop();
         isPlaying = true;
         btn_control.setImageResource(R.drawable.btn_player_pause);
+
+        // 同步音频播放器（DASH 分离音频流）
+        if (audioPlayer != null && audioPlayer.getDuration() > 0) {
+            try {
+                audioPlayer.start();
+            } catch (Exception ignored) {
+            }
+        }
 
         text_speed.setVisibility(layout_top.getVisibility());
         if (isLiveMode)
@@ -1464,10 +1547,16 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
             playerPause();
         } else {
             if (video_now >= video_all - 250) {
-                if (interactionData != null && interactionData.edges != null && 
+                if (interactionData != null && interactionData.edges != null &&
                     interactionData.edges.questions != null && !questionShown) {
                     if (!questionShown) {
                         ijkPlayer.seekTo(0);
+                        if (audioPlayer != null) {
+                            try {
+                                if (audioPlayer.getDuration() > 0) audioPlayer.seekTo(0);
+                            } catch (Exception ignored) {
+                            }
+                        }
                         if (hasDanmaku && mDanmakuView != null) {
                             mDanmakuView.seekTo(0L);
                         }
@@ -1475,6 +1564,12 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
                     }
                 } else {
                     ijkPlayer.seekTo(0);
+                    if (audioPlayer != null) {
+                        try {
+                            if (audioPlayer.getDuration() > 0) audioPlayer.seekTo(0);
+                        } catch (Exception ignored) {
+                        }
+                    }
                     if (hasDanmaku && mDanmakuView != null) {
                         mDanmakuView.seekTo(0L);
                     }
@@ -1581,6 +1676,12 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
                 mDanmakuView.pause();
             }
         }
+        if (audioPlayer != null) {
+            try {
+                if (audioPlayer.isPlaying()) audioPlayer.pause();
+            } catch (Exception ignored) {
+            }
+        }
         if (btn_control != null)
             btn_control.setImageResource(R.drawable.btn_player_play);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && mediaSession != null) {
@@ -1594,6 +1695,12 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
             ijkPlayer.start();
             if (hasDanmaku && mDanmakuView != null) {
                 mDanmakuView.resume();
+            }
+        }
+        if (audioPlayer != null) {
+            try {
+                if (audioPlayer.getDuration() > 0 && !audioPlayer.isPlaying()) audioPlayer.start();
+            } catch (Exception ignored) {
             }
         }
         if (btn_control != null)
@@ -1671,6 +1778,7 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
             ijkPlayer.release();
             ijkPlayer = null;
         }
+        releaseAudioPlayer();
 
         if (isOnlineVideo && danmakuFile != null && danmakuFile.exists())
             danmakuFile.delete();
@@ -2053,6 +2161,12 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
                 if (isPrepared && !destroyed) {
                     int seekPos = seekbar_progress.getProgress();
                     ijkPlayer.seekTo(seekPos);
+                    if (audioPlayer != null) {
+                        try {
+                            if (audioPlayer.getDuration() > 0) audioPlayer.seekTo(seekPos);
+                        } catch (Exception ignored) {
+                        }
+                    }
                     if (hasDanmaku && mDanmakuView != null) {
                         mDanmakuView.seekTo((long) seekPos);
                     }
@@ -2121,6 +2235,12 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
     private void seekToPosition(long position) {
         if (ijkPlayer != null && isPrepared) {
             ijkPlayer.seekTo(position);
+            if (audioPlayer != null) {
+                try {
+                    if (audioPlayer.getDuration() > 0) audioPlayer.seekTo((int) position);
+                } catch (Exception ignored) {
+                }
+            }
             if (hasDanmaku && mDanmakuView != null) {
                 mDanmakuView.seekTo(position);
             }
@@ -2148,6 +2268,7 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
                             ijkPlayer.stop();
                             ijkPlayer.release();
                         }
+                        releaseAudioPlayer();
 
                         loading_info.setVisibility(View.VISIBLE);
                         anim_loading.start();
@@ -2361,6 +2482,7 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
                         ijkPlayer.stop();
                         ijkPlayer.release();
                     }
+                    releaseAudioPlayer();
                     if (mDanmakuView != null) {
                         mDanmakuView.release();
                         mDanmakuView = null;
@@ -2368,6 +2490,7 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
 
                     cid = newCid;
                     video_url = playerData.videoUrl;
+                    audio_url = playerData.audioUrl;
                     danmaku_url = playerData.danmakuUrl;
                     text_title.setText(newTitle);
                     videoTitle = newTitle;
@@ -2521,8 +2644,10 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
                         ijkPlayer.stop();
                         ijkPlayer.release();
                     }
+                    releaseAudioPlayer();
 
                     video_url = playerData.videoUrl;
+                    audio_url = playerData.audioUrl;
                     currentQuality = newQuality;
 
                     if (playerData.qnStrList != null && playerData.qnValueList != null) {
@@ -2716,6 +2841,12 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
 
             if (question.pauseVideo == 1 && isPlaying) {
                 ijkPlayer.pause();
+                if (audioPlayer != null) {
+                    try {
+                        if (audioPlayer.isPlaying()) audioPlayer.pause();
+                    } catch (Exception ignored) {
+                    }
+                }
                 isPlaying = false;
                 btn_control.setImageResource(R.drawable.btn_player_play);
             }
@@ -2900,13 +3031,15 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
                         ijkPlayer.stop();
                         ijkPlayer.release();
                     }
+                    releaseAudioPlayer();
                     if (mDanmakuView != null) {
                         mDanmakuView.release();
                         mDanmakuView = null;
                     }
-                    
+
                     cid = targetCid;
                     video_url = playerData.videoUrl;
+                    audio_url = playerData.audioUrl;
                     danmaku_url = playerData.danmakuUrl;
                     text_title.setText(newData.title);
                     videoTitle = newData.title;
@@ -2988,6 +3121,12 @@ public class PlayerActivity extends Activity implements IjkMediaPlayer.OnPrepare
         runOnUiThread(() -> {
             if (currentQuestion != null && currentQuestion.pauseVideo == 1 && !isPlaying) {
                 ijkPlayer.start();
+                if (audioPlayer != null) {
+                    try {
+                        if (audioPlayer.getDuration() > 0 && !audioPlayer.isPlaying()) audioPlayer.start();
+                    } catch (Exception ignored) {
+                    }
+                }
                 isPlaying = true;
                 btn_control.setImageResource(R.drawable.btn_player_pause);
             }

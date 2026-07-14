@@ -221,10 +221,11 @@ public class PlayerApi {
         playerData.danmakuUrl = "https://comment.bilibili.com/" + playerData.cid + ".xml";
 
         // 免登录试看 1080P：未登录时提升 qn 到 80 并添加 try_look=1
-        // 未登录时强制使用 html5 平台（durl 音视频合一，内置播放器可直接播放）
+        // 注意：不强制 platform=html5，否则 IJKPlayer 解码会绿屏；用默认 pc 平台
         boolean tryLook = shouldTryLook();
-        boolean html5 = !download && (SharedPreferencesUtil.getString("player", "").equals("mtvPlayer") || tryLook);
-        int qn = tryLook ? 80 : playerData.qn;
+        if (tryLook) playerData.qn = 80;
+        boolean html5 = !download && SharedPreferencesUtil.getString("player", "").equals("mtvPlayer");
+        int qn = playerData.qn;
 
         String url = "https://api.bilibili.com/x/player/wbi/playurl?"
                 + "avid=" + playerData.aid
@@ -373,6 +374,7 @@ public class PlayerApi {
             case "terminalPlayer":
                 intent.setClass(context, PlayerActivity.class);
                 intent.putExtra("url", playerData.videoUrl);
+                intent.putExtra("audio_url", playerData.audioUrl);
                 intent.putExtra("danmaku", playerData.danmakuUrl);
                 intent.putExtra("title", playerData.title);
                 intent.putExtra("aid", playerData.aid);

@@ -87,10 +87,13 @@ public class JumpToPlayerActivity extends BaseActivity {
                 if (playerData.isBangumi() && loggedIn) {
                     // 已登录番剧：用 PGC 接口
                     PlayerApi.getBangumi(playerData);
+                } else if (download != 0) {
+                    // 下载场景：用 durl 模式
+                    PlayerApi.getVideo(playerData, true);
                 } else {
-                    // 普通视频 / 未登录番剧(降级为UGC)：用 durl 模式
-                    // 未登录时 getVideo 内部会自动切到 html5 平台 + try_look=1
-                    PlayerApi.getVideo(playerData, download != 0);
+                    // 普通视频（含未登录）：用 durl 模式 + try_look（getVideo 内部判断）
+                    // 注意：IJKPlayer 无法播放 DASH 分离音视频流，durl 模式返回完整音视频流避免绿屏
+                    PlayerApi.getVideo(playerData, false);
                 }
 
                 Logu.d("history", String.valueOf(playerData.progress));
