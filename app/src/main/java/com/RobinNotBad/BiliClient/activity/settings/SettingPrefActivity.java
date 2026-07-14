@@ -43,6 +43,8 @@ public class SettingPrefActivity extends RefreshListActivity {
                         getString(R.string.desc_follow_group_mode), "false"));
                 add(new SettingSection("switch", "夜深了", SharedPreferencesUtil.NIGHT_REMINDER_ENABLE,
                         getString(R.string.desc_night_reminder), "true"));
+                add(new SettingSection("switch", "免登录试看1080P", "try_look_1080",
+                        "未登录时尝试以1080P画质播放（需视频支持）", "true"));
 
 
                 add(new SettingSection("title", "优化", "", "", ""));

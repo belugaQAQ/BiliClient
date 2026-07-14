@@ -61,6 +61,15 @@ public class PlayerApi {
         return Base64.encodeToString(bytes, Base64.NO_WRAP);
     }
 
+    /**
+     * 判断是否启用免登录试看 1080P（参照 PiliPlus try_look 逻辑）
+     * 条件：未登录（mid==0）且设置开关开启
+     */
+    private static boolean shouldTryLook() {
+        return SharedPreferencesUtil.getLong("mid", 0) == 0
+                && SharedPreferencesUtil.getBoolean("try_look_1080", true);
+    }
+
     public static void startGettingUrl(PlayerData playerData) {
         Context context = BiliTerminal.context;
 
@@ -127,6 +136,10 @@ public class PlayerApi {
     public static void getVideoDash(PlayerData playerData) throws JSONException, IOException {
         playerData.danmakuUrl = "https://comment.bilibili.com/" + playerData.cid + ".xml";
 
+        // 免登录试看 1080P：未登录时提升 qn 到 80 并添加 try_look=1
+        boolean tryLook = shouldTryLook();
+        if (tryLook) playerData.qn = 80;
+
         String url = "https://api.bilibili.com/x/player/wbi/playurl?"
                 + "avid=" + playerData.aid
                 + "&cid=" + playerData.cid
@@ -137,6 +150,7 @@ public class PlayerApi {
                 + "&gaia_source=pre-load"
                 + "&isGaiaAvoided=true"
                 + "&web_location=1315873"
+                + (tryLook ? "&try_look=1" : "")
                 + "&dm_img_str=" + randomDmImgStr(16, 64)
                 + "&dm_cover_img_str=" + randomDmImgStr(32, 128)
                 + "&dm_img_inter=" + Uri.encode("{\"ds\":[],\"wh\":[0,0,0],\"of\":[0,0,0]}")
@@ -152,7 +166,7 @@ public class PlayerApi {
             JSONObject dashJson = data.getJSONObject("dash");
             playerData.dashData = DashData.fromJson(dashJson);
 
-            // 设置视频URL（选择指定清晰度的视频流）
+            // 设置视频URL（选择指定清晰度的视频流，未匹配时 getVideoStream 已回退到最高可用）
             DashVideoStream videoStream = playerData.dashData.getVideoStream(playerData.qn);
             if (videoStream != null) {
                 playerData.videoUrl = videoStream.baseUrl;
@@ -209,11 +223,15 @@ public class PlayerApi {
         boolean html5 = !download && SharedPreferencesUtil.getString("player", "").equals("mtvPlayer");
         // html5方式现在已经仅对小电视播放器保留了
 
+        // 免登录试看 1080P：未登录时提升 qn 到 80 并添加 try_look=1
+        boolean tryLook = shouldTryLook();
+        int qn = tryLook ? 80 : playerData.qn;
+
         String url = "https://api.bilibili.com/x/player/wbi/playurl?"
                 + "avid=" + playerData.aid
                 + "&cid=" + playerData.cid
                 + (html5 ? "&high_quality=1" : "")
-                + "&qn=" + playerData.qn
+                + "&qn=" + qn
                 + "&fnval=1&fnver=0"
                 + "&fourk=1"
                 + "&platform=" + (html5 ? "html5" : "pc")
@@ -221,6 +239,7 @@ public class PlayerApi {
                 + "&gaia_source=pre-load"
                 + "&isGaiaAvoided=true"
                 + "&web_location=1315873"
+                + (tryLook ? "&try_look=1" : "")
                 + "&dm_img_str=" + randomDmImgStr(16, 64)
                 + "&dm_cover_img_str=" + randomDmImgStr(32, 128)
                 + "&dm_img_inter=" + Uri.encode("{\"ds\":[],\"wh\":[0,0,0],\"of\":[0,0,0]}")
