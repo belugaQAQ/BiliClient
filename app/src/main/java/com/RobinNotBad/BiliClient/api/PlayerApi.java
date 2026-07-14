@@ -230,9 +230,24 @@ public class PlayerApi {
 
         JSONObject body = NetWorkUtil.getJson(url, NetWorkUtil.webHeaders);
         JSONObject data = body.getJSONObject("data");
-        JSONArray durl = data.getJSONArray("durl");
-        JSONObject video_url = durl.getJSONObject(0);
-        playerData.videoUrl = video_url.getString("url");
+
+        // 优先解析 durl；若服务端返回 dash（fnval=1 也可能返回 dash），则解析 dash
+        if (data.has("durl")) {
+            JSONArray durl = data.getJSONArray("durl");
+            JSONObject video_url = durl.getJSONObject(0);
+            playerData.videoUrl = video_url.getString("url");
+        } else if (data.has("dash")) {
+            JSONObject dashJson = data.getJSONObject("dash");
+            playerData.dashData = DashData.fromJson(dashJson);
+            DashVideoStream videoStream = playerData.dashData.getVideoStream(playerData.qn);
+            if (videoStream != null) {
+                playerData.videoUrl = videoStream.baseUrl;
+            }
+            DashAudioStream audioStream = playerData.dashData.getBestAudioStream();
+            if (audioStream != null) {
+                playerData.audioUrl = audioStream.baseUrl;
+            }
+        }
         playerData.cidHistory = data.optLong("last_play_cid", 0);
         playerData.progress = data.optInt("last_play_time", 0);
 
@@ -242,18 +257,20 @@ public class PlayerApi {
         }
         Logu.d("history", playerData.progress + "," + playerData.cidHistory);
 
-        JSONArray accept_description = data.getJSONArray("accept_description");
-        JSONArray accept_quality = data.getJSONArray("accept_quality");
-        String[] qnStrList = new String[accept_description.length()];
-        int[] qnValueList = new int[accept_description.length()];
-        for (int i = 0; i < qnStrList.length; i++) {
-            qnStrList[i] = accept_description.optString(i);
-            qnValueList[i] = accept_quality.optInt(i);
+        if (data.has("accept_description") && data.has("accept_quality")) {
+            JSONArray accept_description = data.getJSONArray("accept_description");
+            JSONArray accept_quality = data.getJSONArray("accept_quality");
+            String[] qnStrList = new String[accept_description.length()];
+            int[] qnValueList = new int[accept_description.length()];
+            for (int i = 0; i < qnStrList.length; i++) {
+                qnStrList[i] = accept_description.optString(i);
+                qnValueList[i] = accept_quality.optInt(i);
+            }
+            Logu.d("qn_str", Arrays.toString(qnStrList));
+            Logu.d("qn_val", Arrays.toString(qnValueList));
+            playerData.qnStrList = qnStrList;
+            playerData.qnValueList = qnValueList;
         }
-        Logu.d("qn_str", Arrays.toString(qnStrList));
-        Logu.d("qn_val", Arrays.toString(qnValueList));
-        playerData.qnStrList = qnStrList;
-        playerData.qnValueList = qnValueList;
 
     }
 
