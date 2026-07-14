@@ -83,8 +83,15 @@ public class JumpToPlayerActivity extends BaseActivity {
         CenterThreadPool.run(() -> {
 
             try {
-                if (playerData.isBangumi()) PlayerApi.getBangumi(playerData);
-                else PlayerApi.getVideo(playerData, download != 0);
+                boolean loggedIn = SharedPreferencesUtil.getLong("mid", 0) != 0;
+                if (playerData.isBangumi() && loggedIn) {
+                    // 已登录番剧：用 PGC 接口
+                    PlayerApi.getBangumi(playerData);
+                } else {
+                    // 普通视频 / 未登录番剧(降级为UGC)：用 durl 模式
+                    // 未登录时 getVideo 内部会自动切到 html5 平台 + try_look=1
+                    PlayerApi.getVideo(playerData, download != 0);
+                }
 
                 Logu.d("history", String.valueOf(playerData.progress));
                 jump();

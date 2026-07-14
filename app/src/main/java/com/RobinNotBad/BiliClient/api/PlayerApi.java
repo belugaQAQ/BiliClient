@@ -178,7 +178,7 @@ public class PlayerApi {
                 playerData.audioUrl = audioStream.baseUrl;
             }
         } else {
-            getVideo(playerData, true);
+            getVideo(playerData, false);
             return;
         }
 
@@ -220,11 +220,10 @@ public class PlayerApi {
 
         playerData.danmakuUrl = "https://comment.bilibili.com/" + playerData.cid + ".xml";
 
-        boolean html5 = !download && SharedPreferencesUtil.getString("player", "").equals("mtvPlayer");
-        // html5方式现在已经仅对小电视播放器保留了
-
         // 免登录试看 1080P：未登录时提升 qn 到 80 并添加 try_look=1
+        // 未登录时强制使用 html5 平台（durl 音视频合一，内置播放器可直接播放）
         boolean tryLook = shouldTryLook();
+        boolean html5 = !download && (SharedPreferencesUtil.getString("player", "").equals("mtvPlayer") || tryLook);
         int qn = tryLook ? 80 : playerData.qn;
 
         String url = "https://api.bilibili.com/x/player/wbi/playurl?"
