@@ -34,7 +34,16 @@ public class RecommendApi {
                 .put("uniq_id", UNIQ_ID)
                 .put("screen", "1100-2056");
 
-        JSONObject result = NetWorkUtil.getJson(ConfInfoApi.signWBI(url));  //得到一整个json
+        JSONObject result;
+        try {
+            String signedUrl = ConfInfoApi.signWBI(url);
+            Log.d("BiliClient", "RecommendApi signed URL: " + signedUrl);
+            result = NetWorkUtil.getJson(signedUrl);
+        } catch (Exception e) {
+            Log.e("BiliClient", "WBI签名失败，使用原始URL: " + e.getMessage());
+            e.printStackTrace();
+            result = NetWorkUtil.getJson(url);
+        }
 
         int code = result.optInt("code", -1);
         if (code != 0) {

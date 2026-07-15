@@ -68,7 +68,8 @@ public class ConfInfoApi {
         } else mixin_key = SharedPreferencesUtil.getString("wbi_mixin_key", "");
 
         String wts = String.valueOf(System.currentTimeMillis() / 1000);
-        String calc_str = sortUrlParams(Uri.encode(url_query, "@#&=*+-_.,:!?()/~'%") + "&wts=" + wts) + mixin_key;
+        // 只编码查询参数部分，不编码整个URL（避免 ? 被编码为 %3F）
+        String calc_str = sortUrlParams(url_query) + "&wts=" + wts + mixin_key;
         Logu.d(calc_str);
 
         String w_rid = ToolsUtil.md5(calc_str);
