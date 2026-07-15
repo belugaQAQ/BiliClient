@@ -7,6 +7,8 @@ import com.RobinNotBad.BiliClient.model.VideoCard;
 import com.RobinNotBad.BiliClient.util.NetWorkUtil;
 import com.RobinNotBad.BiliClient.util.StringUtil;
 
+import android.net.Uri;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -36,7 +38,7 @@ public class RecommendApi {
                 .put("screen", "1100-2056")
                 .put("dm_img_str", randomDmImgStr(16, 64))
                 .put("dm_cover_img_str", randomDmImgStr(32, 128))
-                .put("dm_img_inter", "{\"ds\":[],\"wh\":[0,0,0],\"of\":[0,0,0]}")
+                .put("dm_img_inter", Uri.encode("{\"ds\":[],\"wh\":[0,0,0],\"of\":[0,0,0]}"))
                 .put("dm_img_list", "[]");
 
         JSONObject result = NetWorkUtil.getJson(ConfInfoApi.signWBI(url));  //得到一整个json

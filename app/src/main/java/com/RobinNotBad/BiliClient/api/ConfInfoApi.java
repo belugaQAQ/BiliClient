@@ -68,42 +68,12 @@ public class ConfInfoApi {
         } else mixin_key = SharedPreferencesUtil.getString("wbi_mixin_key", "");
 
         String wts = String.valueOf(System.currentTimeMillis() / 1000);
-        // 从URL提取参数并解码（WBI签名应基于解码后的值计算）
-        Map<String, String> paramMap = new HashMap<>();
-        String queryString = url_query.contains("?") ? url_query.substring(url_query.indexOf('?') + 1) : "";
-        for (String param : queryString.split("&")) {
-            int eqIdx = param.indexOf('=');
-            if (eqIdx > 0) {
-                String key = param.substring(0, eqIdx);
-                String value = param.substring(eqIdx + 1);
-                // 解码参数值（FormData 已用 URLEncoder.encode 编码）
-                try {
-                    value = java.net.URLDecoder.decode(value, "UTF-8");
-                } catch (Exception e) {
-                    // 解码失败则保持原值
-                }
-                paramMap.put(key, value);
-            } else if (eqIdx == -1 && !param.isEmpty()) {
-                paramMap.put(param, "");
-            }
-        }
-        // 添加 wts 参数
-        paramMap.put("wts", wts);
-
-        // 使用 TreeMap 对参数排序后构建签名字符串
-        Map<String, String> sortedMap = new TreeMap<>(paramMap);
-        StringBuilder calcSb = new StringBuilder();
-        for (Map.Entry<String, String> entry : sortedMap.entrySet()) {
-            if (calcSb.length() > 0) calcSb.append("&");
-            calcSb.append(entry.getKey()).append("=").append(entry.getValue());
-        }
-        String calc_str = calcSb.toString() + mixin_key;
+        String calc_str = sortUrlParams(Uri.encode(url_query, "@#&=*+-_.,:!?()/~'%") + "&wts=" + wts) + mixin_key;
         Logu.d(calc_str);
 
         String w_rid = ToolsUtil.md5(calc_str);
 
-        // 手动拼接URL，避免 HttpUrl 对已编码字符二次处理
-        return url_query + "&w_rid=" + w_rid + "&wts=" + wts;
+        return Objects.requireNonNull(HttpUrl.parse(url_query)).newBuilder().addQueryParameter("w_rid", w_rid).addQueryParameter("wts", wts).build().toString();
     }
 
     public static String sortUrlParams(String url) {
