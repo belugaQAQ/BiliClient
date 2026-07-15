@@ -7,6 +7,8 @@ import com.RobinNotBad.BiliClient.model.VideoCard;
 import com.RobinNotBad.BiliClient.util.NetWorkUtil;
 import com.RobinNotBad.BiliClient.util.StringUtil;
 
+import android.net.Uri;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -23,6 +25,7 @@ import java.util.Random;
 //2023-12-09
 
 public class RecommendApi {
+    private static final Random RANDOM = new Random();
     private static final long UNIQ_ID = (long) (new Random().nextDouble() * (1500000000000L - 1300000000000L));
 
     public static void getRecommend(List<VideoCard> videoCardList) throws IOException, JSONException {
@@ -32,27 +35,61 @@ public class RecommendApi {
                 .put("feed_version", "V8")
                 .put("homepage_ver", 1)
                 .put("uniq_id", UNIQ_ID)
-                .put("screen", "1100-2056");
+                .put("screen", "1100-2056")
+                .put("dm_img_str", randomDmImgStr(16, 64))
+                .put("dm_cover_img_str", randomDmImgStr(32, 128))
+                .put("dm_img_inter", Uri.encode("{\"ds\":[],\"wh\":[0,0,0],\"of\":[0,0,0]}"))
+                .put("dm_img_list", "[]");
 
         JSONObject result = NetWorkUtil.getJson(ConfInfoApi.signWBI(url));  //得到一整个json
 
+        int code = result.optInt("code", -1);
+        if (code != 0) {
+            Log.e("BiliClient", "RecommendApi code=" + code + " msg=" + result.optString("message", ""));
+            throw new JSONException("RecommendApi error code=" + code);
+        }
+
+        if (!result.has("data") || result.isNull("data")) {
+            Log.e("BiliClient", "RecommendApi: no data in response");
+            throw new JSONException("RecommendApi: no data");
+        }
+
         JSONObject data = result.getJSONObject("data");  //推荐列表中的data项又是一个json，把它提出来
+
+        if (!data.has("item") || data.isNull("item")) {
+            Log.e("BiliClient", "RecommendApi: no item in data");
+            throw new JSONException("RecommendApi: no item");
+        }
 
         JSONArray item = data.getJSONArray("item");  //data里面的items是视频卡片列表，把它提出来
 
         for (int i = 0; i < item.length(); i++) {    //遍历所有的视频卡片
             JSONObject card = item.getJSONObject(i);
-            String bvid = card.getString("bvid");    //bv号
+            String bvid = card.optString("bvid", "");
             if (TextUtils.isEmpty(bvid)) {
                 Log.d("BiliClient", "RecommendApi getRecommend: isAd");
                 continue;
             }
-            String cover = card.getString("pic");    //封面图片
-            String title = card.getString("title");    //标题
-            String upName = card.getJSONObject("owner").getString("name");  //up主名字
-            String view = StringUtil.toWan(card.getJSONObject("stat").getInt("view")) + "观看";    //播放量
+            String cover = card.optString("pic", "");
+            String title = card.optString("title", "");
+            String upName = card.optJSONObject("owner") != null ? card.getJSONObject("owner").optString("name", "") : "";
+            int viewCount = card.optJSONObject("stat") != null ? card.getJSONObject("stat").optInt("view", 0) : 0;
+            String view = StringUtil.toWan(viewCount) + "观看";    //播放量
             videoCardList.add(new VideoCard(title, upName, view, cover, 0, bvid));
         }
+    }
+
+    private static String randomDmImgStr(int minLen, int maxLen) {
+        int len = minLen + RANDOM.nextInt(maxLen - minLen + 1);
+        byte[] bytes = new byte[len];
+        for (int i = 0; i < len; i++) {
+            int b;
+            do {
+                b = 0x26 + RANDOM.nextInt(0x7E - 0x26 + 1);
+            } while (b == '%');
+            bytes[i] = (byte) b;
+        }
+        return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
     }
 
     public static ArrayList<VideoCard> getRelated(long aid) throws JSONException, IOException {
