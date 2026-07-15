@@ -24,7 +24,7 @@ import java.util.Random;
 //2023-12-09
 
 public class RecommendApi {
-    private static final long UNIQ_ID = (long) (new Random().nextDouble() * 1000000);
+    private static final long UNIQ_ID = (long) (new Random().nextDouble() * (1500000000000L - 1300000000000L));
 
     public static void getRecommend(List<VideoCard> videoCardList) throws IOException, JSONException {
         String url = ("https://api.bilibili.com/x/web-interface/wbi/index/top/feed/rcmd");
@@ -33,41 +33,14 @@ public class RecommendApi {
                 .put("feed_version", "V8")
                 .put("homepage_ver", 1)
                 .put("uniq_id", UNIQ_ID)
-                .put("screen_width", 1100)
-                .put("screen_height", 2056);
+                .put("screen", "1100-2056");
 
-        JSONObject result;
-        int maxRetries = 2;
-        for (int retry = 0; retry < maxRetries; retry++) {
-            try {
-                // 第一次失败后，清除缓存的 WBI 密钥并重新获取
-                if (retry > 0) {
-                    Log.d("BiliClient", "RecommendApi: 重试，清除 WBI 缓存");
-                    SharedPreferencesUtil.putInt("last_wbi", 0);
-                }
-                
-                String signedUrl = ConfInfoApi.signWBI(url);
-                Log.d("BiliClient", "RecommendApi signed URL: " + signedUrl);
-                result = NetWorkUtil.getJson(signedUrl);
-                
-                int code = result.optInt("code", -1);
-                if (code == 0) {
-                    break; // 成功
-                }
-                
-                Log.e("BiliClient", "RecommendApi code=" + code + " msg=" + result.optString("message", ""));
-                
-                if (retry < maxRetries - 1) {
-                    continue; // 重试
-                }
-                
-                throw new JSONException("RecommendApi error code=" + code);
-            } catch (JSONException e) {
-                if (retry < maxRetries - 1) {
-                    continue; // 重试
-                }
-                throw e;
-            }
+        JSONObject result = NetWorkUtil.getJson(url);  // 不使用 WBI 签名
+
+        int code = result.optInt("code", -1);
+        if (code != 0) {
+            Log.e("BiliClient", "RecommendApi code=" + code + " msg=" + result.optString("message", ""));
+            throw new JSONException("RecommendApi error code=" + code);
         }
 
         if (!result.has("data") || result.isNull("data")) {
