@@ -67,8 +67,17 @@ public class ConfInfoApi {
             SharedPreferencesUtil.putString("wbi_mixin_key", mixin_key);
         } else mixin_key = SharedPreferencesUtil.getString("wbi_mixin_key", "");
 
+        // 先解码已编码的URL（避免双重编码导致签名错误）
+        // FormData.toString() 已经对值做了 URLEncoder.encode，这里 Uri.encode 会再次编码 % → %25
+        String decoded_url;
+        try {
+            decoded_url = java.net.URLDecoder.decode(url_query, "UTF-8");
+        } catch (Exception e) {
+            decoded_url = url_query;
+        }
+
         String wts = String.valueOf(System.currentTimeMillis() / 1000);
-        String calc_str = sortUrlParams(Uri.encode(url_query, "@#&=*+-_.,:!?()/~'%") + "&wts=" + wts) + mixin_key;
+        String calc_str = sortUrlParams(Uri.encode(decoded_url, "@#&=*+-_.,:!?()/~'%") + "&wts=" + wts) + mixin_key;
         Logu.d(calc_str);
 
         String w_rid = ToolsUtil.md5(calc_str);
