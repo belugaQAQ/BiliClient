@@ -67,43 +67,42 @@ public class ConfInfoApi {
             SharedPreferencesUtil.putString("wbi_mixin_key", mixin_key);
         } else mixin_key = SharedPreferencesUtil.getString("wbi_mixin_key", "");
 
-        // 先解码已编码的URL（避免双重编码导致签名错误）
-        // FormData.toString() 已经对值做了 URLEncoder.encode，这里 Uri.encode 会再次编码 % → %25
-        String decoded_url;
-        try {
-            decoded_url = java.net.URLDecoder.decode(url_query, "UTF-8");
-        } catch (Exception e) {
-            decoded_url = url_query;
-        }
-
         String wts = String.valueOf(System.currentTimeMillis() / 1000);
-        String calc_str = sortUrlParams(Uri.encode(decoded_url, "@#&=*+-_.,:!?()/~'%") + "&wts=" + wts) + mixin_key;
+        // 计算签名时使用原始URL（避免双重编码）
+        String calc_str = sortUrlParams(url_query + "&wts=" + wts) + mixin_key;
         Logu.d(calc_str);
 
         String w_rid = ToolsUtil.md5(calc_str);
 
-        return Objects.requireNonNull(HttpUrl.parse(url_query)).newBuilder().addQueryParameter("w_rid", w_rid).addQueryParameter("wts", wts).build().toString();
+        // 手动拼接URL，避免HttpUrl.parse/addQueryParameter对已编码字符再次处理
+        return url_query + "&w_rid=" + w_rid + "&wts=" + wts;
     }
 
     public static String sortUrlParams(String url) {
         String encodedParam = Objects.requireNonNull(HttpUrl.parse(url)).encodedQuery();
         if (encodedParam == null) encodedParam = "";
-        // 解析URL参数
+        // 解析 URL 参数
         Map<String, String> paramMap = new HashMap<>();
         String[] params = encodedParam.split("&");
         for (String param : params) {
             String[] keyValue = param.split("=");
             if (keyValue.length == 2) {
-                paramMap.put(keyValue[0], keyValue[1]);
+                // 解码参数值，避免双重编码导致 WBI 签名错误
+                // FormData.toString() 已用 URLEncoder.encode 编码，Uri.encode 又会编码 % → %25
+                try {
+                    paramMap.put(keyValue[0], java.net.URLDecoder.decode(keyValue[1].replace("+", "%2B"), "UTF-8"));
+                } catch (Exception e) {
+                    paramMap.put(keyValue[0], keyValue[1]);
+                }
             } else if (keyValue.length == 1) {
                 paramMap.put(keyValue[0], "");
             }
         }
 
-        // 使用TreeMap对参数进行排序
+        // 使用 TreeMap 对参数进行排序
         Map<String, String> sortedMap = new TreeMap<>(paramMap);
 
-        // 构建排序后的URL
+        // 构建排序后的 URL
         StringBuilder sortedUrl = new StringBuilder();
         boolean isFirst = true;
         for (Map.Entry<String, String> entry : sortedMap.entrySet()) {
