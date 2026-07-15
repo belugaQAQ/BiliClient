@@ -7,8 +7,6 @@ import com.RobinNotBad.BiliClient.model.VideoCard;
 import com.RobinNotBad.BiliClient.util.NetWorkUtil;
 import com.RobinNotBad.BiliClient.util.StringUtil;
 
-import android.net.Uri;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -16,7 +14,6 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 
 //推荐API 自己写的
@@ -25,7 +22,6 @@ import java.util.Random;
 //2023-12-09
 
 public class RecommendApi {
-    private static final Random RANDOM = new Random();
     private static final long UNIQ_ID = (long) (new Random().nextDouble() * (1500000000000L - 1300000000000L));
 
     public static void getRecommend(List<VideoCard> videoCardList) throws IOException, JSONException {
@@ -35,11 +31,7 @@ public class RecommendApi {
                 .put("feed_version", "V8")
                 .put("homepage_ver", 1)
                 .put("uniq_id", UNIQ_ID)
-                .put("screen", "1100-2056")
-                .put("dm_img_str", randomDmImgStr(16, 64))
-                .put("dm_cover_img_str", randomDmImgStr(32, 128))
-                .put("dm_img_inter", Uri.encode("{\"ds\":[],\"wh\":[0,0,0],\"of\":[0,0,0]}"))
-                .put("dm_img_list", "[]");
+                .put("screen", "1100-2056");
 
         JSONObject result = NetWorkUtil.getJson(ConfInfoApi.signWBI(url));  //得到一整个json
 
@@ -77,19 +69,6 @@ public class RecommendApi {
             String view = StringUtil.toWan(viewCount) + "观看";    //播放量
             videoCardList.add(new VideoCard(title, upName, view, cover, 0, bvid));
         }
-    }
-
-    private static String randomDmImgStr(int minLen, int maxLen) {
-        int len = minLen + RANDOM.nextInt(maxLen - minLen + 1);
-        byte[] bytes = new byte[len];
-        for (int i = 0; i < len; i++) {
-            int b;
-            do {
-                b = 0x26 + RANDOM.nextInt(0x7E - 0x26 + 1);
-            } while (b == '%');
-            bytes[i] = (byte) b;
-        }
-        return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
     }
 
     public static ArrayList<VideoCard> getRelated(long aid) throws JSONException, IOException {
