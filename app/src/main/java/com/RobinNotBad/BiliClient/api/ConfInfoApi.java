@@ -68,11 +68,13 @@ public class ConfInfoApi {
         } else mixin_key = SharedPreferencesUtil.getString("wbi_mixin_key", "");
 
         String wts = String.valueOf(System.currentTimeMillis() / 1000);
-        // 只编码查询参数部分，不编码整个URL（避免 ? 被编码为 %3F）
-        String calc_str = sortUrlParams(url_query) + "&wts=" + wts + mixin_key;
-        Logu.d(calc_str);
+        // 不再使用 Uri.encode 对整个 url_query 编码，避免双重编码问题
+        // url_query 中的参数值已经被 URLEncoder 编码过了
+        String calc_str = sortUrlParams(url_query + "&wts=" + wts) + mixin_key;
+        Logu.d("WBI签名计算: " + calc_str);
 
         String w_rid = ToolsUtil.md5(calc_str);
+        Logu.d("w_rid: " + w_rid);
 
         return Objects.requireNonNull(HttpUrl.parse(url_query)).newBuilder().addQueryParameter("w_rid", w_rid).addQueryParameter("wts", wts).build().toString();
     }

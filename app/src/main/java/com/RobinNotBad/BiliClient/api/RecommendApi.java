@@ -35,12 +35,17 @@ public class RecommendApi {
                 .put("uniq_id", UNIQ_ID)
                 .put("screen", "1100-2056");
 
-        JSONObject result = NetWorkUtil.getJson(url);  // 不使用 WBI 签名
+        // 使用 WBI 签名
+        url = ConfInfoApi.signWBI(url);
+        Log.d("BiliClient", "RecommendApi URL: " + url);
+
+        JSONObject result = NetWorkUtil.getJson(url);
 
         int code = result.optInt("code", -1);
         if (code != 0) {
-            Log.e("BiliClient", "RecommendApi code=" + code + " msg=" + result.optString("message", ""));
-            throw new JSONException("RecommendApi error code=" + code);
+            String msg = result.optString("message", "");
+            Log.e("BiliClient", "RecommendApi code=" + code + " msg=" + msg + " url=" + url);
+            throw new JSONException("RecommendApi error code=" + code + " msg=" + msg);
         }
 
         if (!result.has("data") || result.isNull("data")) {
