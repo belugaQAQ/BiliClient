@@ -39,38 +39,12 @@ public class ConfInfoApi {
             36, 20, 34, 44, 52};
 
     public static String getWBIRawKey() throws IOException, JSONException {
-        // 使用不需要登录的接口获取 WBI 密钥
-        // /x/web-interface/nav 在未登录时可能返回不完整数据
         JSONObject getJson = NetWorkUtil.getJson("https://api.bilibili.com/x/web-interface/nav");
+        JSONObject wbi_img = getJson.getJSONObject("data").getJSONObject("wbi_img");  //不要被名称骗了，这玩意是签名用的
+        String img_key = FileUtil.getFileFirstName(FileUtil.getFileNameFromLink(wbi_img.getString("img_url")));  //得到文件名
+        String sub_key = FileUtil.getFileFirstName(FileUtil.getFileNameFromLink(wbi_img.getString("sub_url")));
 
-        // 检查响应是否成功
-        int code = getJson.optInt("code", -1);
-        if (code != 0) {
-            Logu.e("WBI获取失败: code=" + code + " msg=" + getJson.optString("message", ""));
-            throw new JSONException("获取WBI密钥失败: " + getJson.optString("message", "未知错误"));
-        }
-
-        JSONObject data = getJson.optJSONObject("data");
-        if (data == null) {
-            throw new JSONException("WBI响应数据为空");
-        }
-
-        JSONObject wbi_img = data.optJSONObject("wbi_img");
-        if (wbi_img == null) {
-            throw new JSONException("WBI图片数据为空");
-        }
-
-        String img_url = wbi_img.optString("img_url", "");
-        String sub_url = wbi_img.optString("sub_url", "");
-
-        if (img_url.isEmpty() || sub_url.isEmpty()) {
-            throw new JSONException("WBI URL为空");
-        }
-
-        String img_key = FileUtil.getFileFirstName(FileUtil.getFileNameFromLink(img_url));
-        String sub_key = FileUtil.getFileFirstName(FileUtil.getFileNameFromLink(sub_url));
-
-        return img_key + sub_key;
+        return img_key + sub_key;  //相连
     }
 
     public static String getWBIMixinKey(String raw_key) {
