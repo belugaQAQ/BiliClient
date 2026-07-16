@@ -47,6 +47,8 @@ public class SettingTerminalPlayerActivity extends RefreshListActivity {
                 add(new SettingSection("choose", "解码方式", "player_codec",
                         getString(R.string.desc_videocodec), "true",
                         new String[]{"硬件解码", "软件解码"}));
+                add(new SettingSection("input_int", "视频编码", "video_codec_preference",
+                        "0=自动 1=H264 2=H265 3=AV1（绿屏请选1）", "0"));
                 add(new SettingSection("choose", "音频输出", "player_audio",
                         getString(R.string.desc_audiocodec), "false",
                         new String[]{"OpenSles", "AudioTrack"}));

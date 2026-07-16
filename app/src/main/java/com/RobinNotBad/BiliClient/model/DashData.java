@@ -76,6 +76,61 @@ public class DashData {
     }
 
     /**
+     * 获取指定清晰度和编码的视频流
+     * @param qn 清晰度
+     * @param codec 编码类型：0=自动, 1=H264, 2=H265(HEVC), 3=AV1
+     * @return 匹配的视频流
+     */
+    public DashVideoStream getVideoStream(int qn, int codec) {
+        if (codec == 0) {
+            return getVideoStream(qn);
+        }
+
+        String targetCodec = getCodecString(codec);
+        if (targetCodec == null) {
+            return getVideoStream(qn);
+        }
+
+        // 先找匹配清晰度和编码的
+        for (DashVideoStream stream : videoStreams) {
+            if (stream.id == qn && stream.codecs != null && stream.codecs.contains(targetCodec)) {
+                return stream;
+            }
+        }
+
+        // 找不到匹配的编码，找匹配清晰度的任意编码
+        for (DashVideoStream stream : videoStreams) {
+            if (stream.id == qn) {
+                return stream;
+            }
+        }
+
+        // 找不到匹配清晰度，返回第一个匹配编码的
+        for (DashVideoStream stream : videoStreams) {
+            if (stream.codecs != null && stream.codecs.contains(targetCodec)) {
+                return stream;
+            }
+        }
+
+        // 都没有，返回第一个
+        return videoStreams.isEmpty() ? null : videoStreams.get(0);
+    }
+
+    /**
+     * 获取编码字符串
+     * @param codec 编码类型：0=自动, 1=H264, 2=H265(HEVC), 3=AV1
+     * @return 编码字符串
+     */
+    private String getCodecString(int codec) {
+        switch (codec) {
+            case 1: return "avc1"; // H264
+            case 2: return "hev1"; // H265/HEVC
+            case 3: return "av01"; // AV1
+            default: return null;
+        }
+    }
+
+    /**
      * 获取最高质量的音频流
      */
     public DashAudioStream getBestAudioStream() {

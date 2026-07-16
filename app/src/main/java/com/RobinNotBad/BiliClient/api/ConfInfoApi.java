@@ -86,7 +86,8 @@ public class ConfInfoApi {
         Map<String, String> paramMap = new HashMap<>();
         String[] params = encodedParam.split("&");
         for (String param : params) {
-            String[] keyValue = param.split("=");
+            if (param.isEmpty()) continue;
+            String[] keyValue = param.split("=", 2);
             if (keyValue.length == 2) {
                 paramMap.put(keyValue[0], keyValue[1]);
             } else if (keyValue.length == 1) {

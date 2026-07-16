@@ -166,8 +166,11 @@ public class PlayerApi {
             JSONObject dashJson = data.getJSONObject("dash");
             playerData.dashData = DashData.fromJson(dashJson);
 
-            // 设置视频URL（选择指定清晰度的视频流，未匹配时 getVideoStream 已回退到最高可用）
-            DashVideoStream videoStream = playerData.dashData.getVideoStream(playerData.qn);
+            // 获取编码偏好设置
+            int codecPreference = SharedPreferencesUtil.getInt(SharedPreferencesUtil.VIDEO_CODEC_PREFERENCE, 0);
+
+            // 设置视频URL（选择指定清晰度和编码的视频流，未匹配时 getVideoStream 已回退）
+            DashVideoStream videoStream = playerData.dashData.getVideoStream(playerData.qn, codecPreference);
             if (videoStream != null) {
                 playerData.videoUrl = videoStream.baseUrl;
             }
@@ -258,7 +261,11 @@ public class PlayerApi {
         } else if (data.has("dash")) {
             JSONObject dashJson = data.getJSONObject("dash");
             playerData.dashData = DashData.fromJson(dashJson);
-            DashVideoStream videoStream = playerData.dashData.getVideoStream(playerData.qn);
+            
+            // 获取编码偏好设置
+            int codecPreference = SharedPreferencesUtil.getInt(SharedPreferencesUtil.VIDEO_CODEC_PREFERENCE, 0);
+            
+            DashVideoStream videoStream = playerData.dashData.getVideoStream(playerData.qn, codecPreference);
             if (videoStream != null) {
                 playerData.videoUrl = videoStream.baseUrl;
             }
@@ -328,7 +335,10 @@ public class PlayerApi {
             JSONObject dashJson = data.getJSONObject("dash");
             playerData.dashData = DashData.fromJson(dashJson);
 
-            DashVideoStream videoStream = playerData.dashData.getVideoStream(playerData.qn);
+            // 获取编码偏好设置
+            int codecPreference = SharedPreferencesUtil.getInt(SharedPreferencesUtil.VIDEO_CODEC_PREFERENCE, 0);
+
+            DashVideoStream videoStream = playerData.dashData.getVideoStream(playerData.qn, codecPreference);
             if (videoStream != null) {
                 playerData.videoUrl = videoStream.baseUrl;
             }
